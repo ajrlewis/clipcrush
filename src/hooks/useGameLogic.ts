@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef } from 'react';
 import { searchTracks, getSnippet, DeezerTrack } from '@/lib/services/deezer';
 
 // Updated to match the high-stakes README values
@@ -10,6 +10,8 @@ const TRIALS = [
   { level: 5, duration: 20, penalty: 20, reward: 0 },
   { level: 6, duration: 30, penalty: 25, reward: 0 },
 ];
+
+const MAX_PENALTY = TRIALS[TRIALS.length - 1]?.penalty ?? 0;
 
 export type Step = 'LOBBY' | 'START_SCREEN' | 'DJ_CHOOSE' | 'SONG_RESULTS' | 'GUESSING' | 'GAME_OVER';
 
@@ -87,7 +89,11 @@ export function useGameLogic() {
     } else {
       // Penalty logic
       const penalty = currentTrial.penalty;
-      applyDamage(penalty);
+      const isGameOver = applyDamage(penalty);
+
+      if (isGameOver) {
+        return;
+      }
 
       if (trialIdx < TRIALS.length - 1) {
         setTrialIdx(prev => prev + 1);
@@ -105,24 +111,46 @@ export function useGameLogic() {
     if (activeTeam === 'A') setHasSkippedA(true);
     else setHasSkippedB(true);
 
-    applyDamage(5); // Flat -5 penalty for skip
+    const isGameOver = applyDamage(5); // Flat -5 penalty for skip
+    if (isGameOver) {
+      return;
+    }
+
     endTurn();
   };
 
-  const applyDamage = (amount: number) => {
+  const applyDamage = (amount: number): boolean => {
+    let isGameOver = false;
+
     if (activeTeam === 'A') {
       setBalanceA(prev => {
         const next = prev - amount;
-        if (next <= 0) setStep('GAME_OVER');
+        if (next <= 0) {
+          isGameOver = true;
+          setStep('GAME_OVER');
+        }
         return next;
       });
     } else {
       setBalanceB(prev => {
         const next = prev - amount;
-        if (next <= 0) setStep('GAME_OVER');
+        if (next <= 0) {
+          isGameOver = true;
+          setStep('GAME_OVER');
+        }
         return next;
       });
     }
+
+    return isGameOver;
+  };
+
+  const giveUp = () => {
+    const isGameOver = applyDamage(MAX_PENALTY);
+    if (isGameOver) {
+      return;
+    }
+    endTurn();
   };
 
   const endTurn = () => {
@@ -142,6 +170,7 @@ export function useGameLogic() {
     loading,
     canSkip: activeTeam === 'A' ? !hasSkippedA : !hasSkippedB,
     currentTrial: TRIALS[trialIdx],
-    selectSong, confirmSong, backToSearch, playClip, handleVerbalResult, useSkip
+    maxPenalty: MAX_PENALTY,
+    selectSong, confirmSong, backToSearch, playClip, handleVerbalResult, useSkip, giveUp
   };
 }

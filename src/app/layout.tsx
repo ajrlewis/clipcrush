@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ClipCrush – Every Second Counts",
-  description: "ClipCrush is a fast-paced music guessing game where every second matters. Guess the song from ultra-short clips, risk your points, and crush the competition.",
+  title: "SoundStake – High fidelity. Higher stakes.",
+  description: "SoundStake is a fast-paced music guessing game where every second matters. Guess the song from ultra-short clips, risk your points, and crush the competition.",
 };
 
 export default function RootLayout({

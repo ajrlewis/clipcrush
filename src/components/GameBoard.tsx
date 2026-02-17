@@ -3,20 +3,18 @@
 interface GameBoardProps {
     trialIdx: number;
     activeTeam: 'A' | 'B';
+    balanceA: number;
+    balanceB: number;
+    currentPenalty: number;
+    maxPenalty: number;
     onPlay: () => void;
     onResult: (isCorrect: boolean) => void;
+    onGiveUp: () => void;
   }
   
-  const TRIAL_CONFIG = [
-    { penalty: 1 },
-    { penalty: 3 },
-    { penalty: 5 },
-    { penalty: 10 },
-    { penalty: 15 },
-  ];
-  
-  export function GameBoard({ trialIdx, activeTeam, onPlay, onResult }: GameBoardProps) {
-    const currentPenalty = TRIAL_CONFIG[trialIdx]?.penalty || 0;
+  export function GameBoard({ trialIdx, activeTeam, balanceA, balanceB, currentPenalty, maxPenalty, onPlay, onResult, onGiveUp }: GameBoardProps) {
+    const currentBalance = activeTeam === 'A' ? balanceA : balanceB;
+    const postWrongBalance = Math.max(0, currentBalance - currentPenalty);
   
     return (
       <div className="flex-1 flex flex-col justify-between py-10 animate-in fade-in zoom-in duration-300">
@@ -30,6 +28,9 @@ interface GameBoardProps {
           <h2 className="text-3xl font-black text-white italic">
             TEAM {activeTeam === 'A' ? 'PULSE' : 'ECHO'} <span className="text-zinc-500">GUESSING</span>
           </h2>
+          <p className="mt-3 text-xs text-zinc-400 font-semibold tracking-widest uppercase">
+            Total: <span className="text-white">{currentBalance} pts</span> • After wrong guess: <span className="text-[#ff006e]">{postWrongBalance} pts</span>
+          </p>
         </div>
   
         {/* The Big Play Button */}
@@ -63,6 +64,15 @@ interface GameBoardProps {
             <span className="font-black text-xl">CORRECT</span>
             <span className="text-[10px] font-bold opacity-60 group-hover:opacity-100 italic">WIN TURN</span>
           </button>
+
+          <div className="col-span-2 flex justify-center">
+            <button
+              onClick={onGiveUp}
+              className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 hover:text-[#ff006e] underline underline-offset-4 decoration-zinc-700 hover:decoration-[#ff006e] transition-colors mt-1"
+            >
+              Give up? Lose max {maxPenalty} pts &amp; pass turn
+            </button>
+          </div>
         </div>
       </div>
     );

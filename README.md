@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="public/logo.png" alt="ClipCrush Logo" width="150">
+  <img src="public/logo.png" alt="SoundStake Logo" width="150">
 </p>
 
-# 🎵 ClipCrush
+# 🎵 SoundStake
 
-**ClipCrush** is a high-stakes music guessing game where teams battle to keep their point balance alive. It’s part DJ battle, part auditory endurance test.
+**SoundStake** is a high-stakes music guessing game where teams battle to keep their point balance alive. It’s part DJ battle, part auditory endurance test.
 
 ---
 
@@ -14,7 +14,7 @@ Get the game running locally in seconds:
 
 ```bash
 # Clone the repository
-git clone git@github.com:ajrlewis/clipcrush.git
+git clone git@github.com:ajrlewis/soundstake.git
 
 # Install dependencies
 pnpm install
@@ -47,11 +47,12 @@ If the Listener guesses incorrectly, points are deducted based on the length of 
 
 | Attempt | Length Played | Point Penalty |
 | --- | --- | --- |
-| **Trial 1** | 1 Second | -1 Point |
-| **Trial 2** | 5 Seconds | -3 Points |
-| **Trial 3** | 10 Seconds | -5 Points |
-| **Trial 4** | 20 Seconds | -10 Points |
-| **Trial 5** | 30 Seconds | -15 Points |
+| **Trial 1** | 1 Second | 0 Point |
+| **Trial 2** | 3 Seconds | -3 Points |
+| **Trial 3** | 5 Seconds | -5 Points |
+| **Trial 4** | 10 Seconds | -10 Points |
+| **Trial 5** | 20 Seconds | -20 Points |
+| **Trial 6** | 30 Seconds | -25 Points |
 
 ### 4. The Reward (Point Recovery)
 

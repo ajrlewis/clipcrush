@@ -14,7 +14,8 @@ export default function ClipCrush() {
     step, setStep, activeTeam, balanceA, balanceB, 
     trialIdx, searchQuery, setSearchQuery, searchResults, loading, 
     selectSong, confirmSong, backToSearch,
-    playClip, handleVerbalResult 
+    playClip, handleVerbalResult, 
+    currentTrial, maxPenalty, giveUp
   } = useGameLogic();
 
   return (
@@ -31,11 +32,11 @@ export default function ClipCrush() {
             className="mb-[-40px] md:mb-[-60px]"
           />
           <h1 className="title m-0 p-0 leading-tight">
-            Clip Crush
+            SoundStake
           </h1>
           <div className="space-y-2 mt-2 pb-8">
             <p className="subtitle font-bold tracking-[0.2em] uppercase text-sm">
-              Every Second Counts.
+              High fidelity. Higher stakes.
             </p>
             <div className="h-1 w-12 bg-gradient-to-r from-[#b026ff] to-[#ff006e] mx-auto rounded-full" />
           </div>
@@ -76,8 +77,13 @@ export default function ClipCrush() {
           <GameBoard 
             trialIdx={trialIdx} 
             activeTeam={activeTeam} 
+            balanceA={balanceA}
+            balanceB={balanceB}
+            currentPenalty={currentTrial.penalty}
+            maxPenalty={maxPenalty}
             onPlay={playClip} 
-            onResult={handleVerbalResult} 
+            onResult={handleVerbalResult}
+            onGiveUp={giveUp}
           />
         )}
 
