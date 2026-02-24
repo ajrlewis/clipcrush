@@ -1,6 +1,7 @@
 // src/components/GameBoard.tsx
 import Image from 'next/image';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { DeezerTrack } from '@/lib/services/deezer';
 
 interface GameBoardProps {
@@ -9,6 +10,7 @@ interface GameBoardProps {
   onPlayChunk: (seconds: number) => void;
   onPauseChunk: () => void;
   onResumeChunk: () => void;
+  onMaxIncorrect: () => void;
   onSelectAnotherSong: () => void;
   audioMeter: number;
   audioBands: number[];
@@ -36,18 +38,23 @@ function EyeClosedIcon() {
   );
 }
 
-const CELEBRATION_COLORS = ['#10b981', '#34d399', '#22c55e', '#f59e0b', '#facc15', '#60a5fa'];
-const CELEBRATION_PARTICLES = Array.from({ length: 28 }, (_, idx) => ({
+const CELEBRATION_COLORS = ['#39ff14', '#34d399', '#22c55e', '#4ade80', '#86efac', '#16a34a'];
+const CELEBRATION_PARTICLES = Array.from({ length: 96 }, (_, idx) => ({
   id: idx,
-  left: (idx * 17) % 100,
-  delay: (idx % 6) * 45,
-  duration: 900 + (idx % 5) * 180,
-  drift: (idx % 2 === 0 ? 1 : -1) * (24 + (idx % 7) * 7),
-  rotate: 240 + (idx % 6) * 70,
+  left: 50 + (((idx * 17) % 35) - 17),
+  delay: (idx % 12) * 35,
+  duration: 1360 + (idx % 7) * 95,
+  launchX: (idx % 2 === 0 ? 1 : -1) * (24 + (idx % 10) * 8),
+  launchY: 42 + (idx % 9) * 5,
+  drift: (idx % 2 === 0 ? 1 : -1) * (56 + (idx % 8) * 9),
+  rotate: 290 + (idx % 8) * 60,
   color: CELEBRATION_COLORS[idx % CELEBRATION_COLORS.length],
-  width: 6 + (idx % 3) * 2,
-  height: 10 + (idx % 4) * 2
+  width: 5 + (idx % 5) * 2,
+  height: 10 + (idx % 6) * 2
 }));
+const CELEBRATION_DURATION_MS = 1650;
+const REDUCED_MOTION_CELEBRATION_MS = 500;
+const AUTO_ADVANCE_AFTER_END_MS = 650;
 
 export function GameBoard({
   trialDurations,
@@ -55,6 +62,7 @@ export function GameBoard({
   onPlayChunk,
   onPauseChunk,
   onResumeChunk,
+  onMaxIncorrect,
   onSelectAnotherSong,
   audioMeter,
   audioBands,
@@ -69,10 +77,14 @@ export function GameBoard({
   const [playbackState, setPlaybackState] = useState<PlaybackState>('idle');
   const [isTrackPanelRevealed, setIsTrackPanelRevealed] = useState(false);
   const [isCelebrating, setIsCelebrating] = useState(false);
+  const [isAwaitingRoundAdvance, setIsAwaitingRoundAdvance] = useState(false);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   const [celebrationTick, setCelebrationTick] = useState(0);
+  const toggleTrackPanelReveal = () => setIsTrackPanelRevealed((prev) => !prev);
   const selectedDuration = trialDurations[selectedChunkIdx] ?? trialDurations[0];
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const celebrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoAdvanceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const elapsedRef = useRef(0);
 
   const clearTicker = () => {
@@ -81,14 +93,43 @@ export function GameBoard({
     tickerRef.current = null;
   };
 
+  const clearAutoAdvanceTimer = () => {
+    if (!autoAdvanceTimeoutRef.current) return;
+    clearTimeout(autoAdvanceTimeoutRef.current);
+    autoAdvanceTimeoutRef.current = null;
+  };
+
   useEffect(() => {
     return () => {
       clearTicker();
       if (celebrationTimeoutRef.current) {
         clearTimeout(celebrationTimeoutRef.current);
       }
+      clearAutoAdvanceTimer();
     };
   }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const applyPreference = () => setPrefersReducedMotion(mediaQuery.matches);
+    applyPreference();
+    mediaQuery.addEventListener('change', applyPreference);
+
+    return () => {
+      mediaQuery.removeEventListener('change', applyPreference);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isAwaitingRoundAdvance || playbackState !== 'ended') return;
+    clearAutoAdvanceTimer();
+    autoAdvanceTimeoutRef.current = setTimeout(() => {
+      autoAdvanceTimeoutRef.current = null;
+      setIsAwaitingRoundAdvance(false);
+      onSelectAnotherSong();
+    }, AUTO_ADVANCE_AFTER_END_MS);
+  }, [isAwaitingRoundAdvance, playbackState, onSelectAnotherSong]);
 
   const startTicker = (duration: number) => {
     const stepMs = 50;
@@ -167,23 +208,41 @@ export function GameBoard({
   const isAtMaxChunk = selectedChunkIdx === trialDurations.length - 1;
 
   const handleGuessCorrect = () => {
+    if (isAwaitingRoundAdvance) return;
     const fullClipIdx = trialDurations.length - 1;
     const fullClipDuration = trialDurations[fullClipIdx] ?? FULL_CLIP_SECONDS;
-    if (celebrationTimeoutRef.current) {
-      clearTimeout(celebrationTimeoutRef.current);
+    const celebrationDuration = prefersReducedMotion ? REDUCED_MOTION_CELEBRATION_MS : CELEBRATION_DURATION_MS;
+    if (!isCelebrating) {
+      if (celebrationTimeoutRef.current) {
+        clearTimeout(celebrationTimeoutRef.current);
+      }
+      setCelebrationTick((prev) => prev + 1);
+      setIsCelebrating(true);
+      celebrationTimeoutRef.current = setTimeout(() => {
+        setIsCelebrating(false);
+        celebrationTimeoutRef.current = null;
+      }, celebrationDuration);
     }
-    setCelebrationTick((prev) => prev + 1);
-    setIsCelebrating(true);
-    celebrationTimeoutRef.current = setTimeout(() => {
-      setIsCelebrating(false);
-      celebrationTimeoutRef.current = null;
-    }, 1700);
+    clearAutoAdvanceTimer();
+    setIsAwaitingRoundAdvance(true);
     setIsTrackPanelRevealed(true);
     startChunkPlayback(fullClipDuration, fullClipIdx);
   };
 
   const handleGuessIncorrect = () => {
-    if (isAtMaxChunk) return;
+    if (isAtMaxChunk) {
+      if (playbackState === 'playing') {
+        onPauseChunk();
+      }
+      clearTicker();
+      elapsedRef.current = 0;
+      setElapsedSeconds(0);
+      setPlaybackState('idle');
+      setIsAwaitingRoundAdvance(false);
+      clearAutoAdvanceTimer();
+      onMaxIncorrect();
+      return;
+    }
 
     if (playbackState === 'playing') {
       onPauseChunk();
@@ -196,6 +255,41 @@ export function GameBoard({
     setSelectedChunkIdx((prev) => Math.min(trialDurations.length - 1, prev + 1));
   };
 
+  const celebrationOverlay = isCelebrating ? (
+    <div key={celebrationTick} className="pt-celebration-overlay pointer-events-none fixed inset-0 z-[200] overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(57,255,20,0.4),transparent_62%)]" />
+
+      <div className="absolute inset-x-0 top-[32%] flex justify-center px-6">
+        <div className="pt-celebrate-pop rounded-2xl border border-[#39ff14]/75 bg-[#39ff14]/90 px-6 py-3 text-center shadow-[0_0_34px_rgba(57,255,20,0.55)]">
+          <p className="text-black text-xs font-black uppercase tracking-[0.14em]">They guessed correctly!</p>
+        </div>
+      </div>
+
+      {!prefersReducedMotion &&
+        CELEBRATION_PARTICLES.map((piece) => (
+          <span
+            key={piece.id}
+            className="pt-confetti-piece absolute rounded-sm"
+            style={
+              {
+                left: `${piece.left}%`,
+                bottom: '-24px',
+                width: `${piece.width}px`,
+                height: `${piece.height}px`,
+                backgroundColor: piece.color,
+                animationDelay: `${piece.delay}ms`,
+                animationDuration: `${piece.duration}ms`,
+                '--pt-confetti-launch-x': `${piece.launchX}px`,
+                '--pt-confetti-launch-y': `${piece.launchY}vh`,
+                '--pt-confetti-drift': `${piece.drift}px`,
+                '--pt-confetti-rotate': `${piece.rotate}deg`
+              } as React.CSSProperties
+            }
+          />
+        ))}
+    </div>
+  ) : null;
+
   return (
     <div className="flex-1 flex flex-col py-6 animate-in fade-in zoom-in duration-300">
       <div className="space-y-5">
@@ -203,18 +297,22 @@ export function GameBoard({
           <div className="relative">
             <button
               type="button"
-              onClick={() => setIsTrackPanelRevealed((prev) => !prev)}
+              onClick={toggleTrackPanelReveal}
               aria-label={isTrackPanelRevealed ? 'Hide song details' : 'Reveal song details'}
               aria-pressed={isTrackPanelRevealed}
-              className="absolute right-2 top-2 z-10 grid place-items-center w-8 h-8 rounded-full border border-white/20 bg-black/50 text-zinc-200 hover:text-white hover:border-[#00d4ff]/60 transition-all"
+              className="absolute right-2 top-1/2 -translate-y-1/2 z-10 grid place-items-center w-8 h-8 rounded-full border border-white/20 bg-black/50 text-zinc-200 hover:text-white hover:border-[#00d4ff]/60 transition-all"
             >
               {isTrackPanelRevealed ? <EyeClosedIcon /> : <EyeOpenIcon />}
             </button>
 
-            <div
+            <button
+              type="button"
+              onClick={toggleTrackPanelReveal}
+              aria-label="Toggle track detail blur"
+              aria-pressed={isTrackPanelRevealed}
               className={`rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl p-3 shadow-[0_8px_28px_rgba(0,0,0,0.25)] transition-[filter,opacity] duration-200 ${
                 isTrackPanelRevealed ? 'blur-0 opacity-100' : 'blur-md opacity-70'
-              }`}
+              } text-left w-full`}
             >
               <div className="flex items-center gap-3 pr-11">
                 <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0">
@@ -241,7 +339,7 @@ export function GameBoard({
                   </p>
                 </div>
               </div>
-            </div>
+            </button>
           </div>
         )}
 
@@ -357,8 +455,7 @@ export function GameBoard({
           <button
             type="button"
             onClick={handleGuessIncorrect}
-            disabled={isAtMaxChunk}
-            className="rounded-xl border border-[#f59e0b]/70 bg-[#f59e0b] py-3 text-black text-xs font-black uppercase tracking-[0.1em] shadow-[0_0_18px_rgba(245,158,11,0.35)] hover:shadow-[0_0_24px_rgba(245,158,11,0.5)] transition-all disabled:opacity-45 disabled:cursor-not-allowed"
+            className="rounded-xl border border-[#f59e0b]/70 bg-[#f59e0b] py-3 text-black text-xs font-black uppercase tracking-[0.1em] shadow-[0_0_18px_rgba(245,158,11,0.35)] hover:shadow-[0_0_24px_rgba(245,158,11,0.5)] transition-all"
           >
             Incorrect
           </button>
@@ -368,43 +465,19 @@ export function GameBoard({
       <div className="pt-12">
         <button
           type="button"
-          onClick={onSelectAnotherSong}
+          onClick={() => {
+            setIsAwaitingRoundAdvance(false);
+            clearAutoAdvanceTimer();
+            onSelectAnotherSong();
+          }}
           className="w-full rounded-xl border border-[#00d4ff]/80 bg-[#00d4ff] py-3 text-black font-black text-xs uppercase tracking-[0.14em] shadow-[0_0_20px_rgba(0,212,255,0.35)] hover:shadow-[0_0_28px_rgba(0,212,255,0.5)] active:scale-[0.995] transition-all"
         >
           CHOOSE ANOTHER SONG
         </button>
       </div>
 
-      {isCelebrating && (
-        <div key={celebrationTick} className="pointer-events-none fixed inset-0 z-[70] overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.34),transparent_62%)] animate-pulse" />
-
-          <div className="absolute inset-x-0 top-[32%] flex justify-center px-6">
-            <div className="pt-celebrate-pop rounded-2xl border border-[#10b981]/75 bg-[#10b981]/92 px-6 py-3 text-center shadow-[0_0_34px_rgba(16,185,129,0.5)]">
-              <p className="text-black text-xs font-black uppercase tracking-[0.14em]">They guessed correctly!</p>
-            </div>
-          </div>
-
-          {CELEBRATION_PARTICLES.map((piece) => (
-            <span
-              key={piece.id}
-              className="pt-confetti-piece absolute -top-10 rounded-sm"
-              style={
-                {
-                  left: `${piece.left}%`,
-                  width: `${piece.width}px`,
-                  height: `${piece.height}px`,
-                  backgroundColor: piece.color,
-                  animationDelay: `${piece.delay}ms`,
-                  animationDuration: `${piece.duration}ms`,
-                  '--pt-confetti-drift': `${piece.drift}px`,
-                  '--pt-confetti-rotate': `${piece.rotate}deg`
-                } as React.CSSProperties
-              }
-            />
-          ))}
-        </div>
-      )}
+      {celebrationOverlay &&
+        (typeof document === 'undefined' ? celebrationOverlay : createPortal(celebrationOverlay, document.body))}
     </div>
   );
 }

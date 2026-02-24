@@ -3,12 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useGameLogic } from '@/hooks/useGameLogic';
 
 class MockAudio {
+  static instances: MockAudio[] = [];
   src: string;
+  preload = 'none';
+  currentTime = 0;
+  duration = 30;
   paused = true;
   private listeners: Record<string, Array<() => void>> = {};
 
   constructor(src: string) {
     this.src = src;
+    MockAudio.instances.push(this);
   }
 
   addEventListener(event: string, callback: () => void) {
@@ -28,6 +33,8 @@ class MockAudio {
     this.paused = true;
     this.listeners.pause?.forEach((callback) => callback());
   }
+
+  load() {}
 }
 
 const makeTrack = () => ({
@@ -40,6 +47,8 @@ const makeTrack = () => ({
 
 describe('useGameLogic', () => {
   beforeEach(() => {
+    MockAudio.instances = [];
+    vi.restoreAllMocks();
     vi.stubGlobal('Audio', MockAudio);
     vi.stubGlobal('fetch', vi.fn(async () => ({
       ok: true,
@@ -63,7 +72,6 @@ describe('useGameLogic', () => {
     expect(result.current.targetTrack).toEqual(track);
     expect(result.current.searchQuery).toBe('');
     expect(result.current.searchResults).toEqual([]);
-    expect(result.current.trialIdx).toBe(0);
   });
 
   it('selectAnotherSong flips team and returns to choose flow', () => {
@@ -77,7 +85,6 @@ describe('useGameLogic', () => {
 
     expect(result.current.step).toBe('DJ_CHOOSE');
     expect(result.current.targetTrack).toBeNull();
-    expect(result.current.trialIdx).toBe(0);
     expect(result.current.activeTeam).toBe('B');
   });
 
@@ -91,7 +98,7 @@ describe('useGameLogic', () => {
       result.current.resetGame();
     });
 
-    expect(result.current.step).toBe('LOBBY');
+    expect(result.current.step).toBe('DJ_CHOOSE');
     expect(result.current.activeTeam).toBe('A');
     expect(result.current.balanceA).toBe(30);
     expect(result.current.balanceB).toBe(30);
@@ -101,9 +108,10 @@ describe('useGameLogic', () => {
   });
 
   it('fetches preview once per selected song and reuses cached buffer for chunk plays', async () => {
-    const { result } = renderHook(() => useGameLogic());
+    const { result, unmount } = renderHook(() => useGameLogic());
     const track = makeTrack();
     const fetchMock = vi.mocked(fetch);
+    const createObjectURLMock = vi.mocked(URL.createObjectURL);
 
     act(() => {
       result.current.confirmSong(track);
@@ -111,6 +119,8 @@ describe('useGameLogic', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(MockAudio.instances).toHaveLength(1);
+      expect(createObjectURLMock).toHaveBeenCalledTimes(1);
     });
 
     await act(async () => {
@@ -120,5 +130,8 @@ describe('useGameLogic', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(MockAudio.instances).toHaveLength(1);
+    expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+    unmount();
   });
 });

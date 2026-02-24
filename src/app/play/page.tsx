@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { GameBoard } from '@/components/GameBoard';
-import { RoundReveal } from '@/components/RoundReveal';
 import { GameOver } from '@/components/GameOver';
 import { AppTopBar } from '@/components/AppTopBar';
 import { InstructionsModal } from '@/components/InstructionsModal';
@@ -16,11 +15,9 @@ export default function PlayPage() {
   const [showDonateModal, setShowDonateModal] = useState(false);
   const {
     step,
-    setStep,
     resetGame,
     activeTeam,
     targetTrack,
-    loading,
     audioMeter,
     audioBands,
     isAudioPlaying,
@@ -28,18 +25,18 @@ export default function PlayPage() {
     playClipAtDuration,
     pauseClip,
     resumeClip,
-    playFullClip,
+    giveUp,
     selectAnotherSong
   } = useGame();
 
   useEffect(() => {
-    const inPlayFlow = step === 'GUESSING' || step === 'ROUND_REVEAL' || step === 'GAME_OVER';
+    const inPlayFlow = step === 'GUESSING' || step === 'GAME_OVER';
     if (!inPlayFlow) {
       router.replace('/choose');
       return;
     }
 
-    if ((step === 'GUESSING' || step === 'ROUND_REVEAL') && !targetTrack) {
+    if (step === 'GUESSING' && !targetTrack) {
       router.replace('/choose');
     }
   }, [step, targetTrack, router]);
@@ -49,18 +46,21 @@ export default function PlayPage() {
     router.push('/choose');
   };
 
+  const handleMaxIncorrect = () => {
+    giveUp();
+  };
+
   const handlePlayAgain = () => {
     resetGame();
-    setStep('DJ_CHOOSE');
     router.push('/choose');
   };
 
-  const handleReturnToLobby = () => {
+  const handleBackToChoose = () => {
     resetGame();
-    router.push('/');
+    router.push('/choose');
   };
 
-  if (step !== 'GUESSING' && step !== 'ROUND_REVEAL' && step !== 'GAME_OVER') {
+  if (step !== 'GUESSING' && step !== 'GAME_OVER') {
     return null;
   }
 
@@ -79,6 +79,7 @@ export default function PlayPage() {
             onPlayChunk={playClipAtDuration}
             onPauseChunk={pauseClip}
             onResumeChunk={resumeClip}
+            onMaxIncorrect={handleMaxIncorrect}
             onSelectAnotherSong={handleSelectAnotherSong}
             audioMeter={audioMeter}
             audioBands={audioBands}
@@ -86,20 +87,11 @@ export default function PlayPage() {
           />
         )}
 
-        {step === 'ROUND_REVEAL' && (
-          <RoundReveal
-            track={targetTrack}
-            loading={loading}
-            onPlayFullClip={playFullClip}
-            onSelectAnotherSong={handleSelectAnotherSong}
-          />
-        )}
-
         {step === 'GAME_OVER' && (
           <GameOver
             activeTeam={activeTeam}
             onPlayAgain={handlePlayAgain}
-            onReturnToLobby={handleReturnToLobby}
+            onBackToChoose={handleBackToChoose}
           />
         )}
       </div>

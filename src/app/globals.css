@@ -43,18 +43,29 @@ body {
 
 .pt-confetti-piece {
   animation-name: pt-confetti-fall;
-  animation-timing-function: cubic-bezier(0.2, 0.75, 0.35, 1);
+  animation-timing-function: cubic-bezier(0.22, 0.72, 0.28, 1);
   animation-fill-mode: forwards;
   opacity: 0;
+  will-change: transform, opacity;
 }
 
 @keyframes pt-confetti-fall {
   0% {
-    transform: translate3d(0, -18vh, 0) rotate(0deg);
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
     opacity: 0;
   }
 
-  10% {
+  8% {
+    opacity: 1;
+  }
+
+  34% {
+    transform: translate3d(var(--pt-confetti-launch-x), calc(var(--pt-confetti-launch-y) * -1), 0)
+      rotate(calc(var(--pt-confetti-rotate) * 0.48));
+    opacity: 1;
+  }
+
+  74% {
     opacity: 1;
   }
 
@@ -68,6 +79,10 @@ body {
   animation: pt-celebrate-pop 420ms ease-out;
 }
 
+.pt-celebration-overlay {
+  animation: pt-celebration-fade 1650ms ease-out forwards;
+}
+
 @keyframes pt-celebrate-pop {
   0% {
     transform: scale(0.82);
@@ -77,5 +92,37 @@ body {
   100% {
     transform: scale(1);
     opacity: 1;
+  }
+}
+
+@keyframes pt-celebration-fade {
+  0% {
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  82% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pt-celebration-overlay {
+    animation-duration: 500ms;
+  }
+
+  .pt-celebrate-pop {
+    animation-duration: 200ms;
+  }
+
+  .pt-confetti-piece {
+    display: none;
   }
 }

@@ -3,30 +3,24 @@
 interface GameOverProps {
   activeTeam: 'A' | 'B';
   onPlayAgain: () => void;
-  onReturnToLobby: () => void;
+  onBackToChoose: () => void;
 }
   
-export function GameOver({ activeTeam, onPlayAgain, onReturnToLobby }: GameOverProps) {
-  // Since the game ends when a team's balance hits 0, the WINNER
-  // is actually the team that WASN'T the active team when the game ended.
+export function GameOver({ activeTeam, onPlayAgain, onBackToChoose }: GameOverProps) {
   const winnerName = activeTeam === 'A' ? 'TEAM ECHO' : 'TEAM PULSE';
-  const winnerColor = activeTeam === 'A' ? 'text-[#ff006e]' : 'text-[#b026ff]';
+  const winnerColor = activeTeam === 'A' ? 'text-[#ff4d8a]' : 'text-[#5eead4]';
   const glowColor = activeTeam === 'A' ? 'shadow-[0_0_50px_rgba(255,0,110,0.5)]' : 'shadow-[0_0_50px_rgba(176,38,255,0.5)]';
   
   return (
-    <div className="flex-1 flex flex-col justify-center text-center space-y-10 animate-in zoom-in duration-700">
-      <div className="space-y-2">
-        <h1 className="text-7xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-[#ff006e] via-[#b026ff] to-[#00d4ff] drop-shadow-[0_0_30px_rgba(255,0,110,0.6)]">
-          CRUSHED.
-        </h1>
-        <p className="text-[#ffe66d] font-bold tracking-[0.4em] uppercase text-xs">
-          Game Over
-        </p>
+    <div className="flex-1 flex flex-col justify-center text-center space-y-8 animate-in fade-in zoom-in duration-500">
+      <div className="space-y-3">
+        <p className="text-[#00d4ff] font-bold tracking-[0.28em] uppercase text-xs">Match Finished</p>
+        <h1 className="text-5xl font-black tracking-tight text-white">Game Over</h1>
       </div>
   
-      <div className={`py-8 px-4 rounded-3xl bg-white/5 border border-white/10 ${glowColor} transition-all`}>
+      <div className={`py-8 px-4 rounded-3xl bg-white/5 border border-white/10 ${glowColor}`}>
         <p className="text-zinc-400 uppercase font-black text-sm tracking-widest mb-2">Champion</p>
-        <h2 className={`text-5xl font-black ${winnerColor} drop-shadow-sm`}>
+        <h2 className={`text-5xl font-black ${winnerColor}`}>
           {winnerName}
         </h2>
       </div>
@@ -53,10 +47,10 @@ export function GameOver({ activeTeam, onPlayAgain, onReturnToLobby }: GameOverP
         </button>
   
         <button
-          onClick={onReturnToLobby}
+          onClick={onBackToChoose}
           className="text-zinc-500 hover:text-white text-xs font-bold uppercase tracking-widest underline underline-offset-8 decoration-[#ffe66d]/30 hover:decoration-[#ffe66d] transition-all"
         >
-          Return to Lobby
+          Back to Song Select
         </button>
       </div>
     </div>

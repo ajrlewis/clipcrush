@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GameBoard } from '@/components/GameBoard';
 
 const baseProps = {
@@ -14,6 +14,7 @@ const baseProps = {
   onPlayChunk: vi.fn(),
   onPauseChunk: vi.fn(),
   onResumeChunk: vi.fn(),
+  onMaxIncorrect: vi.fn(),
   onSelectAnotherSong: vi.fn(),
   audioMeter: 0.2,
   audioBands: Array.from({ length: 12 }, (_, idx) => idx / 12),
@@ -21,6 +22,10 @@ const baseProps = {
 };
 
 describe('GameBoard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('plays selected chunk when a chunk button is clicked', () => {
     render(<GameBoard {...baseProps} />);
 
@@ -51,15 +56,22 @@ describe('GameBoard', () => {
   it('keeps artwork sharp and toggles song panel reveal state', () => {
     render(<GameBoard {...baseProps} />);
 
+    const revealButton = screen.getByRole('button', { name: /Reveal song details/i });
+    expect(revealButton.className).toContain('top-1/2');
+    expect(revealButton.className).toContain('-translate-y-1/2');
+
     const artwork = screen.getByAltText(/artwork/i);
     expect(artwork.getAttribute('class')).toContain('object-cover');
     expect(artwork.getAttribute('class')).not.toContain('blur');
 
-    fireEvent.click(screen.getByRole('button', { name: /Reveal song details/i }));
+    fireEvent.click(revealButton);
     screen.getByRole('button', { name: /Hide song details/i });
 
-    fireEvent.click(screen.getByRole('button', { name: /Hide song details/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Toggle track detail blur/i }));
     screen.getByRole('button', { name: /Reveal song details/i });
+
+    fireEvent.click(screen.getByRole('button', { name: /Toggle track detail blur/i }));
+    screen.getByRole('button', { name: /Hide song details/i });
   });
 
   it('fires choose another song action', () => {
@@ -78,10 +90,47 @@ describe('GameBoard', () => {
     screen.getByText(/They guessed correctly!/i);
   });
 
+  it('auto-advances only after full clip ends and brief delay', () => {
+    vi.useFakeTimers();
+    render(<GameBoard {...baseProps} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Guess Correct/i }));
+    act(() => {
+      vi.advanceTimersByTime(1250);
+    });
+    expect(baseProps.onSelectAnotherSong).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(30000);
+    });
+    expect(baseProps.onSelectAnotherSong).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(649);
+    });
+    expect(baseProps.onSelectAnotherSong).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+
+    expect(baseProps.onSelectAnotherSong).toHaveBeenCalledTimes(1);
+    vi.useRealTimers();
+  });
+
   it('increments selected chunk when guess is marked incorrect', () => {
     render(<GameBoard {...baseProps} />);
 
     fireEvent.click(screen.getByRole('button', { name: /Incorrect/i }));
     screen.getByRole('button', { name: /Play 2 second clip/i });
+  });
+
+  it('fires max incorrect callback on last chunk', () => {
+    render(<GameBoard {...baseProps} />);
+
+    fireEvent.click(screen.getByRole('button', { name: '30s' }));
+    fireEvent.click(screen.getByRole('button', { name: /Incorrect/i }));
+
+    expect(baseProps.onMaxIncorrect).toHaveBeenCalledTimes(1);
   });
 });

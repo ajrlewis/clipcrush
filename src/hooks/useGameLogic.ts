@@ -1,33 +1,27 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { searchTracks, DeezerTrack } from '@/lib/services/deezer';
 
-// Updated to match the high-stakes README values
 const TRIALS = [
-  { level: 1, duration: 1, penalty: 0, reward: 2 },
-  { level: 2, duration: 2, penalty: 2, reward: 0 },
-  { level: 3, duration: 3, penalty: 3, reward: 0 },
-  { level: 4, duration: 5, penalty: 5, reward: 0 },
-  { level: 5, duration: 10, penalty: 10, reward: 0 },
-  { level: 6, duration: 30, penalty: 25, reward: 0 },
+  { duration: 1, penalty: 0, reward: 2 },
+  { duration: 2, penalty: 2, reward: 0 },
+  { duration: 3, penalty: 3, reward: 0 },
+  { duration: 5, penalty: 5, reward: 0 },
+  { duration: 10, penalty: 10, reward: 0 },
+  { duration: 30, penalty: 25, reward: 0 }
 ];
 
 const MAX_PENALTY = TRIALS[TRIALS.length - 1]?.penalty ?? 0;
-const FULL_CLIP_DURATION = TRIALS[TRIALS.length - 1]?.duration ?? 30;
-const PREVIEW_BITRATE = 128000;
+const FULL_PREVIEW_SECONDS = TRIALS[TRIALS.length - 1]?.duration ?? 30;
+const SHORT_CLIP_PADDING_SECONDS = 0.25;
 
-export type Step = 'LOBBY' | 'START_SCREEN' | 'DJ_CHOOSE' | 'SONG_RESULTS' | 'GUESSING' | 'ROUND_REVEAL' | 'GAME_OVER';
+export type Step = 'DJ_CHOOSE' | 'SONG_RESULTS' | 'GUESSING' | 'GAME_OVER';
 
 export function useGameLogic() {
-  const [step, setStep] = useState<Step>('LOBBY');
+  const [step, setStep] = useState<Step>('DJ_CHOOSE');
   const [activeTeam, setActiveTeam] = useState<'A' | 'B'>('A');
   const [balanceA, setBalanceA] = useState(30);
   const [balanceB, setBalanceB] = useState(30);
-  const [trialIdx, setTrialIdx] = useState(0);
   const [targetTrack, setTargetTrack] = useState<DeezerTrack | null>(null);
-  
-  // Strategy: One skip per game per team
-  const [hasSkippedA, setHasSkippedA] = useState(false);
-  const [hasSkippedB, setHasSkippedB] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<DeezerTrack[]>([]);
@@ -35,7 +29,7 @@ export function useGameLogic() {
   const [audioMeter, setAudioMeter] = useState(0);
   const [audioBands, setAudioBands] = useState<number[]>(Array.from({ length: 12 }, () => 0));
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
-  
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef<string | null>(null);
   const previewCacheRef = useRef<{ url: string; buffer: ArrayBuffer } | null>(null);
@@ -43,7 +37,12 @@ export function useGameLogic() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceNodeRef = useRef<MediaElementAudioSourceNode | null>(null);
+  const graphAudioRef = useRef<HTMLAudioElement | null>(null);
   const meterFrameRef = useRef<number | null>(null);
+  const clipWatchIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const clipEndTimeRef = useRef<number | null>(null);
+  const preparedPreviewUrlRef = useRef<string | null>(null);
+  const playRequestIdRef = useRef(0);
   const bandBaselineRef = useRef<number[]>(Array.from({ length: 12 }, () => 0));
   const prevSpectrumRef = useRef<Float32Array | null>(null);
   const energyBaselineRef = useRef(0);
@@ -57,6 +56,44 @@ export function useGameLogic() {
   const clearPreviewCache = () => {
     previewCacheRef.current = null;
     previewFetchRef.current = null;
+  };
+
+  const clearClipWatcher = () => {
+    if (!clipWatchIntervalRef.current) return;
+    clearInterval(clipWatchIntervalRef.current);
+    clipWatchIntervalRef.current = null;
+  };
+
+  const stopAtClipBoundary = (audio: HTMLAudioElement) => {
+    if (audioRef.current !== audio) return;
+    clipEndTimeRef.current = null;
+    clearClipWatcher();
+    audio.pause();
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // Ignore currentTime assignment issues when media is not seekable yet.
+    }
+  };
+
+  const startClipWatcher = (audio: HTMLAudioElement) => {
+    clearClipWatcher();
+    clipWatchIntervalRef.current = setInterval(() => {
+      if (audioRef.current !== audio) {
+        clearClipWatcher();
+        return;
+      }
+
+      const clipEndTime = clipEndTimeRef.current;
+      if (clipEndTime === null) {
+        clearClipWatcher();
+        return;
+      }
+
+      if (audio.currentTime >= clipEndTime) {
+        stopAtClipBoundary(audio);
+      }
+    }, 25);
   };
 
   const stopMeterLoop = () => {
@@ -81,7 +118,6 @@ export function useGameLogic() {
     const update = () => {
       analyser.getByteFrequencyData(data);
 
-      // Focus on low-mid and high-mid bins where transients are often more pronounced.
       const rangeStart = Math.max(2, Math.floor(data.length * 0.04));
       const rangeEnd = Math.min(data.length, Math.floor(data.length * 0.45));
       const rangeSize = Math.max(1, rangeEnd - rangeStart);
@@ -124,10 +160,12 @@ export function useGameLogic() {
         nextBands.push(Math.min(1, bandOnset));
       }
 
-      setAudioBands((prev) => nextBands.map((value, idx) => {
-        const prevValue = prev[idx] ?? 0;
-        return prevValue * 0.58 + value * 0.42;
-      }));
+      setAudioBands((prev) =>
+        nextBands.map((value, idx) => {
+          const prevValue = prev[idx] ?? 0;
+          return prevValue * 0.58 + value * 0.42;
+        })
+      );
       setAudioMeter((prev) => prev * 0.62 + meterValue * 0.38);
       meterFrameRef.current = requestAnimationFrame(update);
     };
@@ -141,13 +179,16 @@ export function useGameLogic() {
       sourceNodeRef.current.disconnect();
       sourceNodeRef.current = null;
     }
+    graphAudioRef.current = null;
     stopMeterLoop();
     setIsAudioPlaying(false);
   };
 
   const setupAudioGraph = async (audio: HTMLAudioElement) => {
     if (typeof window === 'undefined') return;
-    const ContextCtor = window.AudioContext ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const ContextCtor =
+      window.AudioContext ??
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!ContextCtor) return;
 
     if (!audioContextRef.current) {
@@ -167,31 +208,52 @@ export function useGameLogic() {
       analyserRef.current = analyser;
     }
 
+    if (sourceNodeRef.current && graphAudioRef.current === audio) {
+      return;
+    }
+
     if (sourceNodeRef.current) {
       sourceNodeRef.current.disconnect();
       sourceNodeRef.current = null;
+      graphAudioRef.current = null;
     }
 
     const source = context.createMediaElementSource(audio);
     source.connect(analyserRef.current);
     sourceNodeRef.current = source;
+    graphAudioRef.current = audio;
   };
 
   const stopAudio = () => {
-    if (!audioRef.current) return;
-
-    audioRef.current.pause();
+    playRequestIdRef.current += 1;
+    clipEndTimeRef.current = null;
+    clearClipWatcher();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      try {
+        audioRef.current.currentTime = 0;
+      } catch {
+        // Ignore currentTime assignment issues when media is not seekable yet.
+      }
+      audioRef.current.src = '';
+    }
     audioRef.current = null;
+    preparedPreviewUrlRef.current = null;
     revokeAudioUrl();
     clearAudioGraph();
   };
 
   useEffect(() => {
     return () => {
+      playRequestIdRef.current += 1;
+      clipEndTimeRef.current = null;
+      clearClipWatcher();
       if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current.src = '';
         audioRef.current = null;
       }
+      preparedPreviewUrlRef.current = null;
       if (audioUrlRef.current) {
         URL.revokeObjectURL(audioUrlRef.current);
         audioUrlRef.current = null;
@@ -200,6 +262,7 @@ export function useGameLogic() {
         sourceNodeRef.current.disconnect();
         sourceNodeRef.current = null;
       }
+      graphAudioRef.current = null;
       if (meterFrameRef.current !== null) {
         cancelAnimationFrame(meterFrameRef.current);
         meterFrameRef.current = null;
@@ -234,19 +297,17 @@ export function useGameLogic() {
   };
 
   const confirmSong = (track: DeezerTrack) => {
+    if (preparedPreviewUrlRef.current !== track.preview) {
+      stopAudio();
+    }
     if (previewCacheRef.current?.url !== track.preview) {
       clearPreviewCache();
     }
     setTargetTrack(track);
     setSearchResults([]);
     setSearchQuery('');
-    setTrialIdx(0);
     setStep('GUESSING');
-    void getPreviewBuffer(track.preview);
-  };
-
-  const backToSearch = () => {
-    setStep('DJ_CHOOSE');
+    void prepareTrackAudio(track.preview);
   };
 
   const getPreviewBuffer = async (previewUrl: string): Promise<ArrayBuffer | null> => {
@@ -284,64 +345,101 @@ export function useGameLogic() {
     return promise;
   };
 
-  const createSnippetBlob = (buffer: ArrayBuffer, seconds: number): Blob => {
-    const bytesPerSecond = PREVIEW_BITRATE / 8;
-    const endByte = Math.min(buffer.byteLength, Math.ceil(seconds * bytesPerSecond));
-    return new Blob([buffer.slice(0, endByte)], { type: 'audio/mpeg' });
+  const prepareTrackAudio = async (previewUrl: string): Promise<HTMLAudioElement | null> => {
+    if (audioRef.current && preparedPreviewUrlRef.current === previewUrl) {
+      await setupAudioGraph(audioRef.current);
+      return audioRef.current;
+    }
+
+    const previewBuffer = await getPreviewBuffer(previewUrl);
+    if (!previewBuffer) {
+      return null;
+    }
+
+    if (audioRef.current && preparedPreviewUrlRef.current === previewUrl) {
+      await setupAudioGraph(audioRef.current);
+      return audioRef.current;
+    }
+
+    if (audioRef.current) {
+      stopAudio();
+    }
+
+    const fullPreviewBlob = new Blob([previewBuffer], { type: 'audio/mpeg' });
+    const url = URL.createObjectURL(fullPreviewBlob);
+    audioUrlRef.current = url;
+
+    const nextAudio = new Audio(url);
+    nextAudio.preload = 'auto';
+    nextAudio.addEventListener('play', () => {
+      setIsAudioPlaying(true);
+      startMeterLoop();
+      startClipWatcher(nextAudio);
+    });
+    nextAudio.addEventListener('pause', () => {
+      setIsAudioPlaying(false);
+      stopMeterLoop();
+      clearClipWatcher();
+    });
+    nextAudio.addEventListener('ended', () => {
+      clipEndTimeRef.current = null;
+      clearClipWatcher();
+      try {
+        nextAudio.currentTime = 0;
+      } catch {
+        // Ignore currentTime assignment issues when media is not seekable yet.
+      }
+    });
+    nextAudio.addEventListener('error', () => {
+      clipEndTimeRef.current = null;
+      clearClipWatcher();
+    });
+    nextAudio.load();
+    audioRef.current = nextAudio;
+    preparedPreviewUrlRef.current = previewUrl;
+    await setupAudioGraph(nextAudio);
+    return nextAudio;
   };
 
-  // SOUL: Frictionless Play - Using native Audio for faster response
   const playTrackDuration = async (seconds: number) => {
     if (!targetTrack) return;
+    const requestId = ++playRequestIdRef.current;
     setLoading(true);
 
     try {
-      const previewBuffer = await getPreviewBuffer(targetTrack.preview);
-      if (!previewBuffer) {
+      const preparedAudio = await prepareTrackAudio(targetTrack.preview);
+      if (!preparedAudio) {
         return;
       }
 
-      const blob = createSnippetBlob(previewBuffer, seconds);
-      stopAudio();
-      const url = URL.createObjectURL(blob);
-      audioUrlRef.current = url;
-      const nextAudio = new Audio(url);
-      audioRef.current = nextAudio;
+      if (requestId !== playRequestIdRef.current || audioRef.current !== preparedAudio) {
+        return;
+      }
 
-      await setupAudioGraph(nextAudio);
+      preparedAudio.pause();
+      try {
+        preparedAudio.currentTime = 0;
+      } catch {
+        // Ignore currentTime assignment issues when media is not seekable yet.
+      }
 
-      const releaseIfCurrent = () => {
-        if (audioRef.current !== nextAudio) return;
-        audioRef.current = null;
-        revokeAudioUrl();
-        clearAudioGraph();
-      };
-
-      nextAudio.addEventListener('ended', releaseIfCurrent, { once: true });
-      nextAudio.addEventListener('error', releaseIfCurrent, { once: true });
-      nextAudio.addEventListener('play', () => {
-        setIsAudioPlaying(true);
-        startMeterLoop();
-      });
-      nextAudio.addEventListener('pause', () => {
-        setIsAudioPlaying(false);
-        stopMeterLoop();
-      });
+      const paddedDuration =
+        seconds <= 2 ? Math.min(FULL_PREVIEW_SECONDS, seconds + SHORT_CLIP_PADDING_SECONDS) : seconds;
+      clipEndTimeRef.current = paddedDuration;
 
       try {
-        await nextAudio.play();
+        await preparedAudio.play();
       } catch (error) {
+        if (requestId !== playRequestIdRef.current) {
+          return;
+        }
         console.error('Audio playback failed:', error);
-        releaseIfCurrent();
+        clipEndTimeRef.current = null;
+        clearClipWatcher();
       }
     } finally {
       setLoading(false);
     }
-  };
-
-  const playClip = async () => {
-    const currentTrial = TRIALS[trialIdx];
-    await playTrackDuration(currentTrial.duration);
   };
 
   const playClipAtDuration = async (seconds: number) => {
@@ -359,65 +457,19 @@ export function useGameLogic() {
     void audioRef.current.play();
   };
 
-  const playFullClip = async () => {
-    await playTrackDuration(FULL_CLIP_DURATION);
-  };
-
-  const finishRound = (nextStep: Step) => {
+  const finishRound = () => {
     stopAudio();
     clearPreviewCache();
-    setActiveTeam(prev => (prev === 'A' ? 'B' : 'A'));
-    setStep(nextStep);
-    setTrialIdx(0);
+    setActiveTeam((prev) => (prev === 'A' ? 'B' : 'A'));
+    setStep('DJ_CHOOSE');
     setTargetTrack(null);
-  };
-
-  const handleVerbalResult = (isCorrect: boolean) => {
-    const currentTrial = TRIALS[trialIdx];
-    
-    if (isCorrect) {
-      // Reward logic: +2 for 1-second ID, capped at 30
-      if (activeTeam === 'A') setBalanceA(prev => Math.min(30, prev + currentTrial.reward));
-      else setBalanceB(prev => Math.min(30, prev + currentTrial.reward));
-      setStep('ROUND_REVEAL');
-    } else {
-      // Penalty logic
-      const penalty = currentTrial.penalty;
-      const isGameOver = applyDamage(penalty);
-
-      if (isGameOver) {
-        return;
-      }
-
-      if (trialIdx < TRIALS.length - 1) {
-        setTrialIdx(prev => prev + 1);
-      } else {
-        // Failed final trial (30s)
-        endTurn();
-      }
-    }
-  };
-
-  const useSkip = () => {
-    const canSkip = activeTeam === 'A' ? !hasSkippedA : !hasSkippedB;
-    if (!canSkip) return;
-
-    if (activeTeam === 'A') setHasSkippedA(true);
-    else setHasSkippedB(true);
-
-    const isGameOver = applyDamage(5); // Flat -5 penalty for skip
-    if (isGameOver) {
-      return;
-    }
-
-    endTurn();
   };
 
   const applyDamage = (amount: number): boolean => {
     let isGameOver = false;
 
     if (activeTeam === 'A') {
-      setBalanceA(prev => {
+      setBalanceA((prev) => {
         const next = prev - amount;
         if (next <= 0) {
           isGameOver = true;
@@ -427,7 +479,7 @@ export function useGameLogic() {
         return next;
       });
     } else {
-      setBalanceB(prev => {
+      setBalanceB((prev) => {
         const next = prev - amount;
         if (next <= 0) {
           isGameOver = true;
@@ -446,51 +498,47 @@ export function useGameLogic() {
     if (isGameOver) {
       return;
     }
-    setStep('ROUND_REVEAL');
-  };
-
-  const endTurn = () => {
-    finishRound('START_SCREEN');
+    finishRound();
   };
 
   const selectAnotherSong = () => {
-    finishRound('DJ_CHOOSE');
+    finishRound();
   };
 
   const resetGame = () => {
     stopAudio();
     clearPreviewCache();
-    setStep('LOBBY');
+    setStep('DJ_CHOOSE');
     setActiveTeam('A');
     setBalanceA(30);
     setBalanceB(30);
-    setTrialIdx(0);
     setTargetTrack(null);
-    setHasSkippedA(false);
-    setHasSkippedB(false);
     setSearchQuery('');
     setSearchResults([]);
     setLoading(false);
   };
 
   return {
-    step, setStep,
+    step,
     activeTeam,
-    balanceA, balanceB,
+    balanceA,
+    balanceB,
     targetTrack,
-    trialIdx,
-    searchQuery, setSearchQuery,
+    searchQuery,
+    setSearchQuery,
     searchResults,
     loading,
     audioMeter,
     audioBands,
     isAudioPlaying,
-    canSkip: activeTeam === 'A' ? !hasSkippedA : !hasSkippedB,
-    currentTrial: TRIALS[trialIdx],
     trialDurations: TRIALS.map((trial) => trial.duration),
-    maxPenalty: MAX_PENALTY,
-    selectSong, confirmSong, backToSearch,
-    playClip, playClipAtDuration, pauseClip, resumeClip, playFullClip,
-    handleVerbalResult, useSkip, giveUp, selectAnotherSong, resetGame
+    selectSong,
+    confirmSong,
+    playClipAtDuration,
+    pauseClip,
+    resumeClip,
+    giveUp,
+    selectAnotherSong,
+    resetGame
   };
 }

@@ -24,7 +24,6 @@ export default function ChoosePage() {
   );
   const {
     step,
-    setStep,
     searchQuery,
     setSearchQuery,
     searchResults,
@@ -34,15 +33,10 @@ export default function ChoosePage() {
   } = useGame();
 
   useEffect(() => {
-    if (step === 'LOBBY' || step === 'START_SCREEN') {
-      setStep('DJ_CHOOSE');
-      return;
-    }
-
-    if (step === 'GUESSING' || step === 'ROUND_REVEAL' || step === 'GAME_OVER') {
+    if (step === 'GUESSING' || step === 'GAME_OVER') {
       router.replace('/play');
     }
-  }, [step, setStep, router]);
+  }, [step, router]);
 
   const showInstructions =
     isManualInstructionsOpen || (shouldShowInstructionsByDefault && !isAutoInstructionsDismissed);
@@ -58,7 +52,7 @@ export default function ChoosePage() {
     router.push('/play');
   };
 
-  if (step === 'GUESSING' || step === 'ROUND_REVEAL' || step === 'GAME_OVER') {
+  if (step === 'GUESSING' || step === 'GAME_OVER') {
     return null;
   }
 
@@ -66,7 +60,7 @@ export default function ChoosePage() {
   const showingResults = step === 'SONG_RESULTS';
 
   return (
-    <main className="min-h-screen bg-[#0a0a0a] text-white p-6 flex flex-col font-sans select-none">
+    <main className="min-h-screen bg-[#0a0a0a] text-white p-6 flex flex-col font-sans select-none animate-in fade-in duration-300">
       <div className="w-full max-w-md mx-auto flex flex-col flex-1 gap-4">
         <AppTopBar
           onOpenInfo={() => setIsManualInstructionsOpen(true)}
