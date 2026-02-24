@@ -40,3 +40,42 @@ body {
   color: var(--energy-blue);
   letter-spacing: 0.02em;
 }
+
+.pt-confetti-piece {
+  animation-name: pt-confetti-fall;
+  animation-timing-function: cubic-bezier(0.2, 0.75, 0.35, 1);
+  animation-fill-mode: forwards;
+  opacity: 0;
+}
+
+@keyframes pt-confetti-fall {
+  0% {
+    transform: translate3d(0, -18vh, 0) rotate(0deg);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: translate3d(var(--pt-confetti-drift), 110vh, 0) rotate(var(--pt-confetti-rotate));
+    opacity: 0;
+  }
+}
+
+.pt-celebrate-pop {
+  animation: pt-celebrate-pop 420ms ease-out;
+}
+
+@keyframes pt-celebrate-pop {
+  0% {
+    transform: scale(0.82);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

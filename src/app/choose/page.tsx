@@ -1,21 +1,27 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { useGame } from '@/context/GameContext';
 import type { DeezerTrack } from '@/lib/services/deezer';
 import Image from 'next/image';
 import { AppTopBar } from '@/components/AppTopBar';
 import { InstructionsModal } from '@/components/InstructionsModal';
+import { DonateBitcoinModal } from '@/components/DonateBitcoinModal';
 
-const INSTRUCTIONS_SEEN_KEY = 'soundstake.instructions_seen';
+const INSTRUCTIONS_SEEN_KEY = 'pass-the-track.instructions_seen';
+const noopSubscribe = () => () => {};
 
 export default function ChoosePage() {
   const router = useRouter();
-  const [showInstructions, setShowInstructions] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return window.localStorage.getItem(INSTRUCTIONS_SEEN_KEY) !== '1';
-  });
+  const [isManualInstructionsOpen, setIsManualInstructionsOpen] = useState(false);
+  const [showDonateModal, setShowDonateModal] = useState(false);
+  const [isAutoInstructionsDismissed, setIsAutoInstructionsDismissed] = useState(false);
+  const shouldShowInstructionsByDefault = useSyncExternalStore(
+    noopSubscribe,
+    () => window.localStorage.getItem(INSTRUCTIONS_SEEN_KEY) !== '1',
+    () => false
+  );
   const {
     step,
     setStep,
@@ -38,10 +44,14 @@ export default function ChoosePage() {
     }
   }, [step, setStep, router]);
 
-  useEffect(() => {
-    if (!showInstructions) return;
+  const showInstructions =
+    isManualInstructionsOpen || (shouldShowInstructionsByDefault && !isAutoInstructionsDismissed);
+
+  const handleCloseInstructions = () => {
+    setIsManualInstructionsOpen(false);
+    setIsAutoInstructionsDismissed(true);
     window.localStorage.setItem(INSTRUCTIONS_SEEN_KEY, '1');
-  }, [showInstructions]);
+  };
 
   const handleConfirmSong = (track: DeezerTrack) => {
     confirmSong(track);
@@ -58,7 +68,10 @@ export default function ChoosePage() {
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white p-6 flex flex-col font-sans select-none">
       <div className="w-full max-w-md mx-auto flex flex-col flex-1 gap-4">
-        <AppTopBar onOpenInfo={() => setShowInstructions(true)} />
+        <AppTopBar
+          onOpenInfo={() => setIsManualInstructionsOpen(true)}
+          onOpenDonate={() => setShowDonateModal(true)}
+        />
 
         <div className="rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl p-4 shadow-[0_8px_28px_rgba(0,0,0,0.25)]">
           <p className="text-[11px] uppercase tracking-[0.24em] text-[#00d4ff] font-bold">Choose Song</p>
@@ -140,7 +153,11 @@ export default function ChoosePage() {
       </div>
 
       {showInstructions && (
-        <InstructionsModal onClose={() => setShowInstructions(false)} />
+        <InstructionsModal onClose={handleCloseInstructions} />
+      )}
+
+      {showDonateModal && (
+        <DonateBitcoinModal onClose={() => setShowDonateModal(false)} />
       )}
     </main>
   );

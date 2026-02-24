@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "cdn-images.deezer.com", pathname: "/**" },
       { protocol: "https", hostname: "cdn-images.dzcdn.net", pathname: "/**" },
       { protocol: "https", hostname: "e-cdns-images.dzcdn.net", pathname: "/**" },
+      { protocol: "https", hostname: "api.qrserver.com", pathname: "/**" },
     ],
   },
 };

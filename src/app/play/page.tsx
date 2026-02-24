@@ -7,11 +7,13 @@ import { RoundReveal } from '@/components/RoundReveal';
 import { GameOver } from '@/components/GameOver';
 import { AppTopBar } from '@/components/AppTopBar';
 import { InstructionsModal } from '@/components/InstructionsModal';
+import { DonateBitcoinModal } from '@/components/DonateBitcoinModal';
 import { useGame } from '@/context/GameContext';
 
 export default function PlayPage() {
   const router = useRouter();
   const [showInstructions, setShowInstructions] = useState(false);
+  const [showDonateModal, setShowDonateModal] = useState(false);
   const {
     step,
     setStep,
@@ -65,7 +67,10 @@ export default function PlayPage() {
   return (
     <main className="min-h-screen bg-[#0a0a0a] text-white p-6 flex flex-col font-sans select-none">
       <div className="w-full max-w-md mx-auto flex flex-col flex-1 gap-4">
-        <AppTopBar onOpenInfo={() => setShowInstructions(true)} />
+        <AppTopBar
+          onOpenInfo={() => setShowInstructions(true)}
+          onOpenDonate={() => setShowDonateModal(true)}
+        />
 
         {step === 'GUESSING' && (
           <GameBoard
@@ -100,6 +105,7 @@ export default function PlayPage() {
       </div>
 
       {showInstructions && <InstructionsModal onClose={() => setShowInstructions(false)} />}
+      {showDonateModal && <DonateBitcoinModal onClose={() => setShowDonateModal(false)} />}
     </main>
   );
 }

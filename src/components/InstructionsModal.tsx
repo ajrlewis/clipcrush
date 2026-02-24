@@ -25,9 +25,11 @@ export function InstructionsModal({ onClose }: InstructionsModalProps) {
         </div>
 
         <div className="mt-4 space-y-3 text-sm text-zinc-200 leading-relaxed">
-          <p>1. Search and choose a song.</p>
-          <p>2. Play short clips, then longer ones if needed.</p>
-          <p>3. Win by getting the guess on the shortest clip.</p>
+          <p>1. You are the DJ: search and choose a song.</p>
+          <p>2. Hand the phone to the guessers. Start with short clips, then go longer if needed.</p>
+          <p>3. A win is any guess that is close enough: correct artist, correct title, or humming it well.</p>
+          <p>4. After each round (win or loss), pass the phone to the next person/team to choose the next song.</p>
+          <p>5. Keep rotating the phone every round. That is what makes it interactive.</p>
         </div>
 
         <button

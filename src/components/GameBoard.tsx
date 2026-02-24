@@ -17,6 +17,38 @@ interface GameBoardProps {
 
 type PlaybackState = 'idle' | 'playing' | 'paused' | 'ended';
 
+function EyeOpenIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden>
+      <path d="M2 12c2.6-4.2 5.9-6.3 10-6.3s7.4 2.1 10 6.3c-2.6 4.2-5.9 6.3-10 6.3S4.6 16.2 2 12Z" />
+      <circle cx="12" cy="12" r="3.1" />
+    </svg>
+  );
+}
+
+function EyeClosedIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden>
+      <path d="M2 12c2.6-4.2 5.9-6.3 10-6.3 1.8 0 3.5.4 5 1.3" />
+      <path d="M22 12c-2.6 4.2-5.9 6.3-10 6.3-1.8 0-3.5-.4-5-1.3" />
+      <path d="m3 3 18 18" />
+    </svg>
+  );
+}
+
+const CELEBRATION_COLORS = ['#10b981', '#34d399', '#22c55e', '#f59e0b', '#facc15', '#60a5fa'];
+const CELEBRATION_PARTICLES = Array.from({ length: 28 }, (_, idx) => ({
+  id: idx,
+  left: (idx * 17) % 100,
+  delay: (idx % 6) * 45,
+  duration: 900 + (idx % 5) * 180,
+  drift: (idx % 2 === 0 ? 1 : -1) * (24 + (idx % 7) * 7),
+  rotate: 240 + (idx % 6) * 70,
+  color: CELEBRATION_COLORS[idx % CELEBRATION_COLORS.length],
+  width: 6 + (idx % 3) * 2,
+  height: 10 + (idx % 4) * 2
+}));
+
 export function GameBoard({
   trialDurations,
   track,
@@ -35,8 +67,12 @@ export function GameBoard({
   const [selectedChunkIdx, setSelectedChunkIdx] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [playbackState, setPlaybackState] = useState<PlaybackState>('idle');
+  const [isTrackPanelRevealed, setIsTrackPanelRevealed] = useState(false);
+  const [isCelebrating, setIsCelebrating] = useState(false);
+  const [celebrationTick, setCelebrationTick] = useState(0);
   const selectedDuration = trialDurations[selectedChunkIdx] ?? trialDurations[0];
   const tickerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const celebrationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const elapsedRef = useRef(0);
 
   const clearTicker = () => {
@@ -48,6 +84,9 @@ export function GameBoard({
   useEffect(() => {
     return () => {
       clearTicker();
+      if (celebrationTimeoutRef.current) {
+        clearTimeout(celebrationTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -125,34 +164,83 @@ export function GameBoard({
 
   const progressRatio = Math.min(elapsedSeconds / FULL_CLIP_SECONDS, 1);
   const progressOffset = CLOCK_CIRCUMFERENCE * (1 - progressRatio);
+  const isAtMaxChunk = selectedChunkIdx === trialDurations.length - 1;
+
+  const handleGuessCorrect = () => {
+    const fullClipIdx = trialDurations.length - 1;
+    const fullClipDuration = trialDurations[fullClipIdx] ?? FULL_CLIP_SECONDS;
+    if (celebrationTimeoutRef.current) {
+      clearTimeout(celebrationTimeoutRef.current);
+    }
+    setCelebrationTick((prev) => prev + 1);
+    setIsCelebrating(true);
+    celebrationTimeoutRef.current = setTimeout(() => {
+      setIsCelebrating(false);
+      celebrationTimeoutRef.current = null;
+    }, 1700);
+    setIsTrackPanelRevealed(true);
+    startChunkPlayback(fullClipDuration, fullClipIdx);
+  };
+
+  const handleGuessIncorrect = () => {
+    if (isAtMaxChunk) return;
+
+    if (playbackState === 'playing') {
+      onPauseChunk();
+    }
+
+    clearTicker();
+    elapsedRef.current = 0;
+    setElapsedSeconds(0);
+    setPlaybackState('idle');
+    setSelectedChunkIdx((prev) => Math.min(trialDurations.length - 1, prev + 1));
+  };
 
   return (
     <div className="flex-1 flex flex-col py-6 animate-in fade-in zoom-in duration-300">
       <div className="space-y-5">
         {track && (
-          <div className="flex items-center gap-3 rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl p-3 shadow-[0_8px_28px_rgba(0,0,0,0.25)]">
-            <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0">
-              {track.album?.cover_medium ? (
-                <Image
-                  src={track.album.cover_medium}
-                  alt={`${track.title} artwork`}
-                  width={48}
-                  height={48}
-                  className="object-cover scale-110 blur-[1.5px]"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-zinc-500 text-2xl" aria-hidden>
-                  ♪
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsTrackPanelRevealed((prev) => !prev)}
+              aria-label={isTrackPanelRevealed ? 'Hide song details' : 'Reveal song details'}
+              aria-pressed={isTrackPanelRevealed}
+              className="absolute right-2 top-2 z-10 grid place-items-center w-8 h-8 rounded-full border border-white/20 bg-black/50 text-zinc-200 hover:text-white hover:border-[#00d4ff]/60 transition-all"
+            >
+              {isTrackPanelRevealed ? <EyeClosedIcon /> : <EyeOpenIcon />}
+            </button>
+
+            <div
+              className={`rounded-2xl border border-white/20 bg-white/10 backdrop-blur-xl p-3 shadow-[0_8px_28px_rgba(0,0,0,0.25)] transition-[filter,opacity] duration-200 ${
+                isTrackPanelRevealed ? 'blur-0 opacity-100' : 'blur-md opacity-70'
+              }`}
+            >
+              <div className="flex items-center gap-3 pr-11">
+                <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-zinc-800 flex-shrink-0">
+                  {track.album?.cover_medium ? (
+                    <Image
+                      src={track.album.cover_medium}
+                      alt={`${track.title} artwork`}
+                      width={48}
+                      height={48}
+                      className="object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-zinc-500 text-2xl" aria-hidden>
+                      ♪
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm text-white truncate">
-                <span className="text-zinc-300">Now Playing:</span>{' '}
-                <span className="font-black">{track.title}</span>{' '}
-                <span className="text-zinc-300">by</span>{' '}
-                <span className="font-black">{track.artist.name}</span>
-              </p>
+                <div className="min-w-0">
+                  <p className="text-sm text-white truncate">
+                    <span className="text-zinc-300">Now Playing:</span>{' '}
+                    <span className="font-black">{track.title}</span>{' '}
+                    <span className="text-zinc-300">by</span>{' '}
+                    <span className="font-black">{track.artist.name}</span>
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -257,6 +345,24 @@ export function GameBoard({
             );
           })}
         </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={handleGuessCorrect}
+            className="rounded-xl border border-[#10b981]/70 bg-[#10b981] py-3 text-black text-xs font-black uppercase tracking-[0.1em] shadow-[0_0_18px_rgba(16,185,129,0.35)] hover:shadow-[0_0_24px_rgba(16,185,129,0.5)] transition-all"
+          >
+            Guess Correct
+          </button>
+          <button
+            type="button"
+            onClick={handleGuessIncorrect}
+            disabled={isAtMaxChunk}
+            className="rounded-xl border border-[#f59e0b]/70 bg-[#f59e0b] py-3 text-black text-xs font-black uppercase tracking-[0.1em] shadow-[0_0_18px_rgba(245,158,11,0.35)] hover:shadow-[0_0_24px_rgba(245,158,11,0.5)] transition-all disabled:opacity-45 disabled:cursor-not-allowed"
+          >
+            Incorrect
+          </button>
+        </div>
       </div>
 
       <div className="pt-12">
@@ -268,6 +374,37 @@ export function GameBoard({
           CHOOSE ANOTHER SONG
         </button>
       </div>
+
+      {isCelebrating && (
+        <div key={celebrationTick} className="pointer-events-none fixed inset-0 z-[70] overflow-hidden">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(16,185,129,0.34),transparent_62%)] animate-pulse" />
+
+          <div className="absolute inset-x-0 top-[32%] flex justify-center px-6">
+            <div className="pt-celebrate-pop rounded-2xl border border-[#10b981]/75 bg-[#10b981]/92 px-6 py-3 text-center shadow-[0_0_34px_rgba(16,185,129,0.5)]">
+              <p className="text-black text-xs font-black uppercase tracking-[0.14em]">They guessed correctly!</p>
+            </div>
+          </div>
+
+          {CELEBRATION_PARTICLES.map((piece) => (
+            <span
+              key={piece.id}
+              className="pt-confetti-piece absolute -top-10 rounded-sm"
+              style={
+                {
+                  left: `${piece.left}%`,
+                  width: `${piece.width}px`,
+                  height: `${piece.height}px`,
+                  backgroundColor: piece.color,
+                  animationDelay: `${piece.delay}ms`,
+                  animationDuration: `${piece.duration}ms`,
+                  '--pt-confetti-drift': `${piece.drift}px`,
+                  '--pt-confetti-rotate': `${piece.rotate}deg`
+                } as React.CSSProperties
+              }
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

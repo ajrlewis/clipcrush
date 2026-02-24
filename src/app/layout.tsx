@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SoundStake – High fidelity. Higher stakes.",
-  description: "SoundStake is a fast-paced music guessing game where every second matters. Guess the song from ultra-short clips, risk your points, and crush the competition.",
+  title: "Pass the Track – Guess from the clip.",
+  description: "Pass the Track is a fast-paced music guessing experience where every second matters. Play short clips, pass the device, and keep the momentum going.",
 };
 
 export default function RootLayout({

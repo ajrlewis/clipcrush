@@ -8,7 +8,7 @@ export function Lobby({ onStart }: LobbyProps) {
   return (
     <div className="flex-1 flex flex-col justify-center gap-6 animate-in fade-in zoom-in duration-500">
       <div className="text-center space-y-2">
-        <p className="text-[11px] uppercase tracking-[0.3em] text-[#00d4ff] font-bold">SoundStake</p>
+        <p className="text-[11px] uppercase tracking-[0.3em] text-[#00d4ff] font-bold">Pass the Track</p>
         <h1 className="text-4xl font-black tracking-tight text-white">Clip Duel</h1>
       </div>
 
