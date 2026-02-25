@@ -9,12 +9,14 @@ import { AppTopBar } from '@/components/AppTopBar';
 import { InstructionsModal } from '@/components/InstructionsModal';
 import { DonateBitcoinModal } from '@/components/DonateBitcoinModal';
 import { PrivacyModal } from '@/components/PrivacyModal';
+import { useCookieConsent } from '@/context/CookieConsentContext';
 
 const INSTRUCTIONS_SEEN_KEY = 'pass-the-track.instructions_seen';
 const noopSubscribe = () => () => {};
 
 export default function ChoosePage() {
   const router = useRouter();
+  const { openBanner } = useCookieConsent();
   const [isManualInstructionsOpen, setIsManualInstructionsOpen] = useState(false);
   const [showDonateModal, setShowDonateModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -154,7 +156,7 @@ export default function ChoosePage() {
           onClick={() => setShowPrivacyModal(true)}
           className="text-[11px] uppercase tracking-[0.14em] text-zinc-400 hover:text-[#00d4ff] transition-colors"
         >
-          Privacy
+          Privacy & Cookies
         </button>
       </footer>
 
@@ -167,7 +169,13 @@ export default function ChoosePage() {
       )}
 
       {showPrivacyModal && (
-        <PrivacyModal onClose={() => setShowPrivacyModal(false)} />
+        <PrivacyModal
+          onClose={() => setShowPrivacyModal(false)}
+          onOpenCookieSettings={() => {
+            setShowPrivacyModal(false);
+            openBanner();
+          }}
+        />
       )}
     </main>
   );

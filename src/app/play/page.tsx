@@ -8,10 +8,12 @@ import { AppTopBar } from '@/components/AppTopBar';
 import { InstructionsModal } from '@/components/InstructionsModal';
 import { DonateBitcoinModal } from '@/components/DonateBitcoinModal';
 import { PrivacyModal } from '@/components/PrivacyModal';
+import { useCookieConsent } from '@/context/CookieConsentContext';
 import { useGame } from '@/context/GameContext';
 
 export default function PlayPage() {
   const router = useRouter();
+  const { openBanner } = useCookieConsent();
   const [showInstructions, setShowInstructions] = useState(false);
   const [showDonateModal, setShowDonateModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
@@ -104,13 +106,21 @@ export default function PlayPage() {
           onClick={() => setShowPrivacyModal(true)}
           className="text-[11px] uppercase tracking-[0.14em] text-zinc-400 hover:text-[#00d4ff] transition-colors"
         >
-          Privacy
+          Privacy & Cookies
         </button>
       </footer>
 
       {showInstructions && <InstructionsModal onClose={() => setShowInstructions(false)} />}
       {showDonateModal && <DonateBitcoinModal onClose={() => setShowDonateModal(false)} />}
-      {showPrivacyModal && <PrivacyModal onClose={() => setShowPrivacyModal(false)} />}
+      {showPrivacyModal && (
+        <PrivacyModal
+          onClose={() => setShowPrivacyModal(false)}
+          onOpenCookieSettings={() => {
+            setShowPrivacyModal(false);
+            openBanner();
+          }}
+        />
+      )}
     </main>
   );
 }

@@ -1,8 +1,9 @@
 interface PrivacyModalProps {
   onClose: () => void;
+  onOpenCookieSettings?: () => void;
 }
 
-export function PrivacyModal({ onClose }: PrivacyModalProps) {
+export function PrivacyModal({ onClose, onOpenCookieSettings }: PrivacyModalProps) {
   return (
     <div
       className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm px-6 py-10 flex items-center justify-center"
@@ -29,7 +30,8 @@ export function PrivacyModal({ onClose }: PrivacyModalProps) {
             <p className="text-[11px] uppercase tracking-[0.14em] text-[#00d4ff] font-bold">Data We Collect</p>
             <p className="mt-1 text-zinc-300">
               We use Vercel Analytics for aggregate traffic metrics (for example page views, referring pages, and
-              browser/device categories). We do not require user accounts or collect names or emails in this app.
+              browser/device categories) only when you accept analytics cookies. We do not require user accounts or
+              collect names or emails in this app.
             </p>
           </section>
 
@@ -52,13 +54,24 @@ export function PrivacyModal({ onClose }: PrivacyModalProps) {
           </section>
         </div>
 
-        <button
-          type="button"
-          onClick={onClose}
-          className="mt-6 w-full rounded-xl border border-[#00d4ff]/70 bg-[#00d4ff] py-3 text-black text-xs font-black uppercase tracking-[0.12em] shadow-[0_0_18px_rgba(0,212,255,0.35)]"
-        >
-          Close
-        </button>
+        <div className="mt-6 grid grid-cols-1 gap-2">
+          {onOpenCookieSettings && (
+            <button
+              type="button"
+              onClick={onOpenCookieSettings}
+              className="w-full rounded-xl border border-white/25 bg-white/[0.04] py-3 text-xs font-black uppercase tracking-[0.12em] text-zinc-200 hover:border-white/45 hover:bg-white/[0.08] transition"
+            >
+              Manage Cookie Consent
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-xl border border-[#00d4ff]/70 bg-[#00d4ff] py-3 text-black text-xs font-black uppercase tracking-[0.12em] shadow-[0_0_18px_rgba(0,212,255,0.35)]"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );
